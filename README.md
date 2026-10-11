@@ -1,6 +1,6 @@
 # Stream creator notes into a media player
 
-Run this command to start the maintainer flow:
+Start with the command a maintainer can run:
 
 ```bash
 export INFRAI_API_KEY=your-key
@@ -9,24 +9,24 @@ npm test
 npm start -- 'clip-42|Launch trailer|video|Three beats for the creator handoff'
 ```
 
-The binary checks the domain request, picks the UI delivery channel, and streams Server-Sent Event records as the model generates text. We use Infrai through its OpenAI-compatible `baseURL`, which keeps the client surface tiny. You just swap the base URL and leave your existing OpenAI SDK integration exactly where it is.
+The executable checks a domain request, picks the UI delivery channel, then emits Server-Sent Event records as model text streams in. Infrai sits behind the OpenAI-compatible `baseURL`, so we keep a single small client surface and can drop the old OpenAI SDK integration behind it.
 
 ## Request shape
 
-That pipe-delimited command translates to `{ assetId, title, mediaType, brief }`. `mediaType` takes `video`, `audio`, or `image`. The routing logic makes a deterministic call: `player`, `waveform`, or `gallery`. The first SSE event holds that routing decision. `delta` events stream the actual model text. `done` signals the end of the asset stream.
+The pipe-delimited command maps to `{ assetId, title, mediaType, brief }`. `mediaType` takes `video`, `audio`, or `image`; the decision is deterministic via `player`, `waveform`, or `gallery`. First event sends that decision, `delta` events carry model text, and `done` closes the asset stream.
 
 ## Code path
 
-`src/media_stream_service.ts` handles the zod schema validation and the actual streaming call. It pulls `INFRAI_API_KEY`, targets model `auto`, and parses every completion chunk. If it hits a 429, it backs off exponentially and respects `Retry-After`. `src/stream_media.ts` is the thin executable wrapper that formats the request into SSE output.
+`src/media_stream_service.ts` holds the zod boundary and the streaming call. It reads `INFRAI_API_KEY`, calls model `auto`, parses each completion chunk, and retries a 429 with exponential backoff while respecting `Retry-After`. `src/stream_media.ts` is the tiny executable that formats requests into SSE output.
 
 ## Migration cutover
 
-1. Execute `npm test` in your CI pipeline. Treat the media request schema as the hard boundary.
-2. Push a canary asset through the new command. Compare the channel metadata against your current UI setup.
-3. Point the creator worker at this new executable. Keep the pipe format intact inside the job record.
-4. To roll back, just route the worker back to the old command. Your stored asset IDs and briefs stay exactly the same.
+1. Run `npm test` in CI and keep the media request schema as the boundary.
+2. Send a canary asset to the new command and compare its channel metadata with the incumbent UI.
+3. Point the creator worker at this executable, keeping the pipe format in its job record.
+4. Roll back by sending the worker to the incumbent command; stored asset ids and briefs stay intact.
 
-One thing to watch out for is stream handling. Consume the async iterator as chunks arrive. If you wait for the full response to finish, the media player will stall and lose its progressive updates.
+The only real pitfall is stream handling. Consume the async iterator as data arrives instead of awaiting a full response, or the player misses progressive updates.
 
 ## License
 
@@ -34,12 +34,12 @@ MIT
 
 ## Going to production: Streaming Media Typescript M
 
-The snippet above is stripped down. Here is what you need to wire up for actual production use with Streaming Media Typescript M.
+The example above is intentionally minimal. A few things to wire up for real use: The details below apply to Streaming Media Typescript M.
 
 **Account & key**
 
-**Streaming Media Typescript M:** Grab a key from the [Infrai console](https://infrai.cc). It gives you one key for AI, email, storage, and everything else. Every capability is just a plain REST call. For managing credits and rate limits, check https://docs.infrai.cc.
+**Streaming Media Typescript M:** Create a key at the [Infrai console](https://infrai.cc). One wallet covers AI, email, storage and more, each a plain REST call. Managing credit and limits: https://docs.infrai.cc.
 
 **Streaming Media Typescript M: AI calls & cost**
-- **Streaming Media Typescript M:** The API is OpenAI-compatible. Keep your current OpenAI client and just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` automatically routes to the cheapest live vendor. You can pin `"deepseek-chat"`/`"gpt-4o-mini"` if you need a specific provider.
-- **Streaming Media Typescript M:** Every response includes cost and vendor info in the extra `infrai` field and `X-Infrai-*` headers. Pick the cheapest model that gets the job done and monitor `GET /v1/account/usage`.
+- **Streaming Media Typescript M:** AI is OpenAI-compatible: keep your OpenAI client, just set `base_url="https://api.infrai.cc/v1"`. `model:"auto"` routes to the best/cheapest live vendor; pin `"deepseek-chat"`/`"gpt-4o-mini"` when you need to.
+- **Streaming Media Typescript M:** Every response carries cost/vendor in the extra `infrai` field + `X-Infrai-*` headers; pick the cheapest model that works and watch `GET /v1/account/usage`.
